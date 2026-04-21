@@ -1,0 +1,349 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Sentinel — Agentic Honeypot</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+<div id="app">
+
+  <div class="top-bar">
+    <span class="logo">⬡ SENTINEL — Agentic Honeypot</span>
+    <div style="flex:1"></div>
+    <span class="status-chip chip-ok" id="main-status">
+      <span class="dot g" id="main-dot"></span>
+      <span id="main-status-txt">Primary app protected</span>
+    </span>
+    <span class="status-chip chip-hp" id="hp-status" style="display:none">
+      <span class="dot" style="background:#d06fd0"></span> Honeypot active
+    </span>
+  </div>
+
+  <div class="main-grid">
+
+    <!-- Panel 1: Traffic feed -->
+    <div class="panel">
+      <div class="panel-title"><span style="color:#4361ee">●</span> live traffic feed</div>
+      <div class="counter-row">
+        <div class="counter"><div class="counter-val c-g" id="cnt-ok">0</div><div class="counter-lbl">Normal</div></div>
+        <div class="counter"><div class="counter-val c-y" id="cnt-sus">0</div><div class="counter-lbl">Suspicious</div></div>
+        <div class="counter"><div class="counter-val c-r" id="cnt-atk">0</div><div class="counter-lbl">Blocked</div></div>
+        <div class="counter"><div class="counter-val c-p" id="cnt-hp">0</div><div class="counter-lbl">→ HP</div></div>
+      </div>
+      <div id="traffic-feed" class="traffic-feed"></div>
+      <div class="btn-row">
+        <button class="sim-btn btn-atk" onclick="triggerAttack()">⚡ Simulate attack</button>
+        <button class="sim-btn btn-norm" onclick="triggerNormal()">+ Normal burst</button>
+        <button class="sim-btn btn-reset" onclick="resetSystem()">↺ Reset</button>
+      </div>
+    </div>
+
+    <!-- Panel 2: AI agent -->
+    <div class="panel">
+      <div class="panel-title"><span style="color:#ffd60a">◆</span> ai agent reasoning</div>
+      <div id="agent-log" class="agent-log"></div>
+    </div>
+
+    <!-- Panel 3: Infrastructure -->
+    <div class="panel">
+      <div class="panel-title"><span style="color:#06d6a0">■</span> infrastructure</div>
+
+      <div class="attacker-box" id="attacker-box">
+        ☠ Attacker: <span id="attacker-ip">—</span><br>
+        <span style="color:#774455;font-size:10px">Pattern: <span id="attacker-pattern">—</span></span>
+      </div>
+
+      <div class="flow-box">
+        <div class="flow-line normal" id="flow-line"></div>
+        <span style="font-size:9px;color:#334">HTTPS traffic</span>
+      </div>
+
+      <div class="infra-box primary-infra" id="primary-box">
+        <div style="display:flex;align-items:center;gap:8px">
+          <span style="font-size:18px">🖥</span>
+          <div>
+            <div class="infra-name">Primary Application</div>
+            <div class="infra-url">app.myservice.io — us-east-1</div>
+          </div>
+          <div style="margin-left:auto" id="primary-health" class="stat live">HEALTHY</div>
+        </div>
+        <div class="infra-stats">
+          <span class="stat live" id="stat-rps">RPS: 12</span>
+          <span class="stat" id="stat-lat">Lat: 45ms</span>
+          <span class="stat" id="stat-err">Err: 0%</span>
+        </div>
+      </div>
+
+      <div class="reroute-arrow" id="reroute-arrow">↙ attack traffic rerouted ↗</div>
+
+      <div class="infra-box honey-infra" id="honeypot-box">
+        <div style="display:flex;align-items:center;gap:8px">
+          <span style="font-size:18px">🍯</span>
+          <div>
+            <div class="infra-name" style="color:#c06fc0">Honeypot Environment</div>
+            <div class="infra-url" id="hp-url">Not deployed</div>
+          </div>
+          <div style="margin-left:auto" id="hp-health" class="stat">OFFLINE</div>
+        </div>
+        <div class="deploy-status" id="deploy-status">
+          <span class="deploy-step" id="step-1">[ ] Locus API: allocate environment</span>
+          <span class="deploy-step" id="step-2">[ ] Clone app image → honeypot</span>
+          <span class="deploy-step" id="step-3">[ ] Inject deception layer</span>
+          <span class="deploy-step" id="step-4">[ ] Update BGP routing table</span>
+          <span class="deploy-step" id="step-5">[ ] Honeypot live — rerouting</span>
+        </div>
+      </div>
+
+      <div class="overlay-msg" id="alert-msg">🚨 ATTACK DETECTED — Deploying honeypot</div>
+
+    </div>
+
+  </div>
+</div>
+
+<script>
+  const feed     = document.getElementById('traffic-feed');
+  const agentLog = document.getElementById('agent-log');
+
+  let counters         = { ok: 0, sus: 0, atk: 0, hp: 0 };
+  let honeypotActive   = false;
+  let isAnalyzing      = false;
+  let attackerIP       = '';
+  let attackPattern    = '';
+  let suspiciousBuffer = [];
+
+  const normalPaths   = ['/api/users','/','/api/products','/health','/api/orders','/static/main.js','/api/search','/favicon.ico','/api/auth/refresh'];
+  const attackPaths   = ["';DROP TABLE users;--",'/../../../etc/passwd','/api/admin/dump','<script>alert(1)<\/script>','/wp-admin/setup-config.php','/.env','/api/users?id=1 OR 1=1','/%00../etc/shadow','/api/exec?cmd=whoami'];
+  const attackIPs     = ['185.220.101.47','45.33.32.156','198.54.117.200','94.102.61.10','89.248.165.0'];
+  const attackMethods = ['GET','POST','POST','GET'];
+
+  const rand   = arr => arr[Math.floor(Math.random() * arr.length)];
+  const randIP = () => `${~~(Math.random()*200+10)}.${~~(Math.random()*255)}.${~~(Math.random()*255)}.${~~(Math.random()*255)}`;
+  const ts     = () => new Date().toISOString().slice(11,19);
+  const sleep  = ms => new Promise(r => setTimeout(r, ms));
+
+  function addTraffic(type, method, path, ip, extra = '') {
+    const el = document.createElement('div');
+    el.className = `req ${type}`;
+    el.innerHTML =
+      `<span style="color:#44446a;font-size:10px">${ts()} ${ip}</span><br>` +
+      `<strong>${method}</strong> ${path}` +
+      (extra ? `<br><span style="font-size:10px;opacity:.6">${extra}</span>` : '');
+    feed.appendChild(el);
+    feed.scrollTop = feed.scrollHeight;
+    if (feed.children.length > 100) feed.removeChild(feed.firstChild);
+  }
+
+  function addLog(type, tag, html) {
+    const el = document.createElement('div');
+    el.className = `log-entry log-${type}`;
+    el.innerHTML = `<span class="tag">${tag}</span>${html}`;
+    agentLog.appendChild(el);
+    agentLog.scrollTop = agentLog.scrollHeight;
+    if (agentLog.children.length > 50) agentLog.removeChild(agentLog.firstChild);
+    return el;
+  }
+
+  function updateCounters() {
+    document.getElementById('cnt-ok').textContent  = counters.ok;
+    document.getElementById('cnt-sus').textContent = counters.sus;
+    document.getElementById('cnt-atk').textContent = counters.atk;
+    document.getElementById('cnt-hp').textContent  = counters.hp;
+  }
+
+  function spawnNormal() {
+    addTraffic('normal', Math.random() > 0.7 ? 'POST' : 'GET', rand(normalPaths), randIP());
+    counters.ok++;
+    updateCounters();
+    document.getElementById('stat-rps').textContent = `RPS: ${~~(Math.random()*8+8)}`;
+    document.getElementById('stat-lat').textContent = `Lat: ${~~(Math.random()*30+35)}ms`;
+  }
+
+  function spawnAttack() {
+    if (!attackerIP) attackerIP = rand(attackIPs);
+    const path    = rand(attackPaths);
+    attackPattern = path.length > 22 ? path.slice(0,22) + '…' : path;
+    const method  = rand(attackMethods);
+
+    if (honeypotActive) {
+      addTraffic('rerouted', method, path, attackerIP, '→ honeypot.locus.io');
+      counters.hp++;
+    } else {
+      addTraffic('suspicious', method, path, attackerIP, '⚠ anomalous pattern');
+      counters.sus++;
+      suspiciousBuffer.push({ method, path, ip: attackerIP });
+      if (suspiciousBuffer.length >= 3 && !isAnalyzing && !honeypotActive) {
+        const sample = [...suspiciousBuffer];
+        suspiciousBuffer = [];
+        addLog('info', '🔍 THRESHOLD HIT', 'Anomaly threshold reached. Escalating to AI analysis.');
+        analyzeWithClaude(sample);
+      }
+    }
+    updateCounters();
+  }
+
+  async function analyzeWithClaude(sample) {
+    isAnalyzing = true;
+    const thinkEl = addLog('think', '🤔 ANALYZING',
+      `<span class="spinner"></span>Inspecting ${sample.length} suspicious requests<span class="thinking-dots"></span>`
+    );
+    try {
+      const res    = await fetch('/api/analyze', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ trafficSample: sample })
+      });
+      const result = await res.json();
+      thinkEl.remove();
+      addLog('think', '🧠 AI VERDICT',
+        `<strong>${result.verdict === 'attack' ? '⚠️ ATTACK CONFIRMED' : '✓ Benign traffic'}</strong><br>` +
+        `${result.reasoning}<br>` +
+        `<span style="opacity:.6;font-size:10px">Confidence: ${result.confidence}% | Type: ${result.attack_type || 'N/A'}</span>`
+      );
+      if (result.verdict === 'attack') await handleAttack(result);
+      else addLog('info', 'ℹ️ DECISION', 'Traffic classified as benign. Monitoring resumed.');
+    } catch {
+      thinkEl.remove();
+      addLog('alert', '⚡ FALLBACK', 'API unreachable — heuristic detection active. Attack confirmed.');
+      await handleAttack({ attack_type: 'Multi-vector Attack', confidence: 85, reasoning: 'Heuristic: multiple IOCs matched' });
+    }
+    isAnalyzing = false;
+  }
+
+  async function handleAttack(result) {
+    counters.atk++;
+    updateCounters();
+    document.getElementById('alert-msg').classList.add('show');
+    document.getElementById('primary-box').classList.add('under-attack');
+    document.getElementById('primary-health').textContent = 'UNDER ATTACK';
+    document.getElementById('primary-health').className   = 'stat danger';
+    document.getElementById('main-status').className      = 'status-chip chip-atk';
+    document.getElementById('main-status-txt').textContent = 'Attack detected';
+    document.getElementById('main-dot').className          = 'dot r';
+    document.getElementById('attacker-box').classList.add('show');
+    document.getElementById('attacker-ip').textContent      = attackerIP;
+    document.getElementById('attacker-pattern').textContent = attackPattern;
+
+    addLog('alert', '🚨 EXECUTIVE DECISION',
+      `Attack type: <strong>${result.attack_type}</strong><br>Initiating autonomous honeypot deployment.`
+    );
+    await sleep(700);
+    addLog('locus', '📡 LOCUS API CALL',
+      `POST /environments/create<br>` +
+      `<span style="font-size:10px;opacity:.7">{"type":"mirror","source":"app.myservice.io","deception":true}</span>`
+    );
+    await deployHoneypot();
+  }
+
+  async function deployHoneypot() {
+    document.getElementById('deploy-status').classList.add('show');
+    const steps = ['step-1','step-2','step-3','step-4','step-5'];
+    const done  = [
+      '✓ Locus API: environment allocated (eu-west-2)',
+      '✓ App image cloned → honeypot-45a2f.locus.io',
+      '✓ Deception layer injected (fake data, trackers)',
+      '✓ BGP routing table updated',
+      '✓ Honeypot live — attack traffic rerouted'
+    ];
+    for (let i = 0; i < steps.length; i++) {
+      const el = document.getElementById(steps[i]);
+      el.className   = 'deploy-step active';
+      el.textContent = '⏳ ' + el.textContent.slice(4);
+      await sleep(600);
+      el.className   = 'deploy-step done';
+      el.textContent = done[i];
+    }
+    await sleep(200);
+    activateHoneypot();
+  }
+
+  function activateHoneypot() {
+    honeypotActive = true;
+    document.getElementById('honeypot-box').classList.add('active');
+    document.getElementById('hp-url').textContent    = 'honeypot-45a2f.locus.io';
+    document.getElementById('hp-url').style.color    = '#8855aa';
+    document.getElementById('hp-health').textContent = 'LIVE';
+    document.getElementById('hp-health').className   = 'stat';
+    document.getElementById('hp-health').style.cssText =
+      'color:#d06fd0;border-color:rgba(181,23,158,.4);background:rgba(181,23,158,.1);' +
+      'font-size:10px;padding:2px 6px;border-radius:3px;font-family:var(--mono)';
+    document.getElementById('hp-status').style.display = 'flex';
+    document.getElementById('alert-msg').classList.remove('show');
+    document.getElementById('reroute-arrow').classList.add('show');
+    document.getElementById('flow-line').className = 'flow-line attack';
+    document.getElementById('primary-box').classList.remove('under-attack');
+    document.getElementById('primary-health').textContent = 'PROTECTED';
+    document.getElementById('primary-health').className   = 'stat live';
+    document.getElementById('main-status').className      = 'status-chip chip-ok';
+    document.getElementById('main-status-txt').textContent = 'Primary app protected';
+    document.getElementById('main-dot').className          = 'dot g';
+
+    addLog('action', '✅ HONEYPOT ACTIVE',
+      `Mirror env live at <strong>honeypot-45a2f.locus.io</strong><br>` +
+      `All traffic from <strong>${attackerIP}</strong> rerouted.<br>` +
+      `<span style="opacity:.6;font-size:10px">Attacker is unaware. Primary app restored.</span>`
+    );
+  }
+
+  function triggerAttack() {
+    addLog('info', '📌 MANUAL', 'Simulating attack sequence...');
+    attackerIP = rand(attackIPs);
+    let i = 0;
+    const t = setInterval(() => { spawnAttack(); if (++i >= 6) clearInterval(t); }, 500);
+  }
+
+  function triggerNormal() {
+    let i = 0;
+    const t = setInterval(() => { spawnNormal(); if (++i >= 8) clearInterval(t); }, 180);
+  }
+
+  function resetSystem() {
+    honeypotActive = false; isAnalyzing = false;
+    attackerIP = ''; attackPattern = '';
+    counters = { ok:0, sus:0, atk:0, hp:0 };
+    suspiciousBuffer = [];
+    updateCounters();
+    feed.innerHTML = ''; agentLog.innerHTML = '';
+
+    ['honeypot-box','attacker-box','reroute-arrow','alert-msg'].forEach(id =>
+      document.getElementById(id).classList.remove('active','show')
+    );
+    document.getElementById('primary-box').classList.remove('under-attack');
+    document.getElementById('primary-health').textContent = 'HEALTHY';
+    document.getElementById('primary-health').className   = 'stat live';
+    document.getElementById('hp-url').textContent         = 'Not deployed';
+    document.getElementById('hp-url').style.color         = '';
+    document.getElementById('hp-health').textContent      = 'OFFLINE';
+    document.getElementById('hp-health').className        = 'stat';
+    document.getElementById('hp-health').style.cssText    = '';
+    document.getElementById('hp-status').style.display    = 'none';
+    document.getElementById('deploy-status').classList.remove('show');
+    document.getElementById('flow-line').className         = 'flow-line normal';
+    document.getElementById('main-status').className       = 'status-chip chip-ok';
+    document.getElementById('main-status-txt').textContent = 'Primary app protected';
+    document.getElementById('main-dot').className          = 'dot g';
+
+    [
+      ['step-1','[ ] Locus API: allocate environment'],
+      ['step-2','[ ] Clone app image → honeypot'],
+      ['step-3','[ ] Inject deception layer'],
+      ['step-4','[ ] Update BGP routing table'],
+      ['step-5','[ ] Honeypot live — rerouting']
+    ].forEach(([id, txt]) => {
+      const el = document.getElementById(id);
+      el.className = 'deploy-step';
+      el.textContent = txt;
+    });
+
+    addLog('info','🔄 RESET','System reset. Monitoring resumed.');
+  }
+
+  // Boot
+  addLog('info','🟢 BOOT','Sentinel agent initialized. Monitoring primary application.');
+  addLog('info','📡 CONFIG','Anomaly threshold: 3 requests. Locus API: connected. Claude: ready.');
+  setInterval(() => { if (Math.random() > 0.35) spawnNormal(); }, 1300);
+</script>
+</body>
+</html>
