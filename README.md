@@ -1,4 +1,4 @@
-# ⬡ Sentinel — Agentic Honeypot
+# ⬡ Locus DefenderX
 
 > **Security-as-an-Agent.** Instead of a static firewall, an AI agent monitors live traffic, detects attacks, and autonomously spins up a mirror honeypot environment — rerouting the attacker there while keeping the primary app fully protected.
 
@@ -42,8 +42,8 @@ The agent makes the entire decision autonomously — no human in the loop.
 ### 1. Clone & install
 
 ```bash
-git clone https://github.com/YOUR_USERNAME/sentinel-honeypot.git
-cd sentinel-honeypot
+git clone https://github.com/YOUR_USERNAME/locus-defenderX.git
+cd locus-defenderX
 npm install
 ```
 
@@ -73,7 +73,7 @@ npm run dev
 ## Project structure
 
 ```
-sentinel-honeypot/
+locus-defenderX/
 ├── server.js          # Express server + Claude API proxy + Locus API sim
 ├── public/
 │   └── index.html     # Full dashboard (HTML/CSS/JS, zero dependencies)
