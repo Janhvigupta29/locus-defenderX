@@ -11,22 +11,22 @@ Incoming traffic
       │
       ▼
 ┌─────────────────┐
-│  Traffic Monitor │  ← streams HTTP requests in real time
+│ Traffic Monitor │  ← streams HTTP requests in real time
 └────────┬────────┘
          │ 3+ anomalies
          ▼
 ┌─────────────────┐
-│   Claude Agent   │  ← analyzes patterns, decides: attack or benign?
+│   Claude Agent  │  ← analyzes patterns, decides: attack or benign?
 └────────┬────────┘
          │ verdict: attack
          ▼
 ┌─────────────────┐
-│   Locus API      │  ← spins up mirror environment in seconds
+│   Locus API     │  ← spins up mirror environment in seconds
 └────────┬────────┘
          │ env ready
          ▼
 ┌─────────────────┐
-│  BGP Reroute     │  ← attacker traffic silently redirected
+│  BGP Reroute    │  ← attacker traffic silently redirected
 └─────────────────┘
          │
          ▼
@@ -42,7 +42,7 @@ The agent makes the entire decision autonomously — no human in the loop.
 ### 1. Clone & install
 
 ```bash
-git clone https://github.com/YOUR_USERNAME/locus-defenderX.git
+git clone https://github.com/Janhvigupta29/locus-defenderX.git
 cd locus-defenderX
 npm install
 ```
@@ -74,12 +74,16 @@ npm run dev
 
 ```
 locus-defenderX/
-├── server.js          # Express server + Claude API proxy + Locus API sim
-├── public/
-│   └── index.html     # Full dashboard (HTML/CSS/JS, zero dependencies)
-├── .env.example       # Environment variable template
+├── second-website/
+│   └── index.html
+|   └── style.css 
+├── .env.example
 ├── .gitignore
+└── index.html
 └── package.json
+└── README.md
+├── server.js
+└── style.css
 ```
 
 ---
